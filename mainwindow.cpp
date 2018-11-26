@@ -5,6 +5,7 @@
 #include <fstream>
 #include <iostream>
 #include <chrono>
+#include <thread>
 #include <list>
 
 MainWindow::MainWindow(QWidget *parent) :
@@ -60,9 +61,11 @@ void MainWindow::readInput() {
 void MainWindow::retrySerialPort() {
 	serialPort.setBaudRate(prefs.baudrate);
 	serialPort.setPortName(QString::fromStdString(prefs.port));
+	serialPort.setDataBits(QSerialPort::Data8);
 	serialPort.setStopBits(QSerialPort::OneStop);
-	serialPort.setParity(QSerialPort::Parity::NoParity);
+	serialPort.setParity(QSerialPort::NoParity);
 	serialPortOpen = serialPort.open(QIODevice::ReadOnly);
+	std::this_thread::sleep_for(std::chrono::milliseconds(250));
 }
 
 void MainWindow::useSerialPort() {
@@ -71,7 +74,7 @@ void MainWindow::useSerialPort() {
 		retrySerialPort();
 	if (!serialPortOpen) {
 		if (prefs.simulationFile.empty()) {
-			ui->statusBar->showMessage("Could not connect to port");
+			ui->statusBar->showMessage("Could not connect to port: " + serialPort.errorString());
 			stop();
 			return;
 		}

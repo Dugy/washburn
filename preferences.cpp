@@ -46,7 +46,7 @@ preferences::preferences()
 
 void preferences::setup() {
 	baudrate = 9600;
-	port = "COM0";
+	port = "COM1";
 	folder = "";
 	readingInterval = 100;
 	simulationFile = "";
