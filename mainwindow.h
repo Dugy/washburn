@@ -27,7 +27,11 @@ private slots:
 
 	void on_startStopButton_clicked();
 
-	void on_saveButton_clicked();
+	void on_saveDataButton_clicked();
+
+	void on_setResultsFileButton_clicked();
+
+	void on_saveResultsButton_clicked();
 
 private:
 	Ui::MainWindow* ui;
@@ -46,6 +50,7 @@ private:
 	void start();
 	void stop();
 	bool running = false;
+	bool usingFile = false;
 
 	float getAuxiliaryTimeInterval();
 	void retrySerialPort();

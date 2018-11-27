@@ -37,6 +37,8 @@ MainWindow::MainWindow(QWidget *parent) :
 
 	ui->plot->xAxis->setLabel("Time [s]");
 	ui->plot->yAxis->setLabel("Mass [g]");
+
+	ui->statusBar->showMessage("This program was written by Ján Dugáček. More information at https://github.com/Dugy/washburn");
 }
 
 MainWindow::~MainWindow()
@@ -70,7 +72,7 @@ void MainWindow::retrySerialPort() {
 
 void MainWindow::useSerialPort() {
 	std::string input;
-	if (!serialPortOpen)
+	if (!serialPortOpen && !usingFile)
 		retrySerialPort();
 	if (!serialPortOpen) {
 		if (prefs.simulationFile.empty()) {
@@ -78,8 +80,10 @@ void MainWindow::useSerialPort() {
 			stop();
 			return;
 		}
-		if (!simulationFile)
+		if (!simulationFile) {
+			usingFile = true;
 			simulationFile = std::make_unique<std::ifstream>(prefs.simulationFile);
+		}
 		if (!simulationFile->good()) {
 			ui->statusBar->showMessage("Done reading");
 			stop();
@@ -98,6 +102,7 @@ void MainWindow::useSerialPort() {
 	std::stringstream inputStream(input);
 	std::string line;
 	while (std::getline(inputStream, line, '\n')) {
+		//std::cout << "Parsing line " << line << std::endl;
 		float got = 0;
 		int sign = 1;
 		int at = 0;
@@ -131,6 +136,7 @@ void MainWindow::start() {
 	timer->start(prefs.readingInterval);
 	computationTimer->start(prefs.computationInterval);
 	running = true;
+	usingFile = false;
 	ui->startStopButton->setText("Stop");
 	started = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 }
@@ -142,6 +148,7 @@ void MainWindow::stop() {
 	ui->startStopButton->setText("Start");
 	compute();
 	plot();
+	ui->statusBar->showMessage("Experiment ended");
 }
 
 float MainWindow::getAuxiliaryTimeInterval() {
@@ -190,7 +197,7 @@ void MainWindow::on_startStopButton_clicked()
 	else start();
 }
 
-void MainWindow::on_saveButton_clicked()
+void MainWindow::on_saveDataButton_clicked()
 {
 	QString QFileName = QFileDialog::getSaveFileName(this, tr("Save Data"), QString::fromStdString(prefs.folder), tr("Files (*.txt)"));
 	if (!QFileName.size()) return;
@@ -431,4 +438,49 @@ void MainWindow::compute() {
 	else out << "still measuring.";
 
 	ui->outputLabel->setText(QString::fromStdString(out.str()));
+}
+
+void MainWindow::on_setResultsFileButton_clicked()
+{
+	QString QFileName = QFileDialog::getSaveFileName(this, tr("Save Results"), QString::fromStdString(prefs.folder), tr("Files (*.csv)"), nullptr, QFileDialog::DontConfirmOverwrite);
+	prefs.resultsFile = QFileName.toStdString();
+	ui->statusBar->showMessage("File for saving results set");
+}
+
+void MainWindow::on_saveResultsButton_clicked()
+{
+	bool resultsFileExists = false;
+	{
+		std::ifstream readingOutput(prefs.resultsFile);
+		resultsFileExists = readingOutput.good();
+	} // Not sure how much C++17 support we have
+
+	std::ofstream out;
+	if (resultsFileExists) {
+		out.open(prefs.resultsFile, std::ios_base::app);
+	} else {
+		out.open(prefs.resultsFile);
+		out << "name\tmass at zero\tmass at maximum\tmass when detached\tparameter a\tparameter b\ttotal volume\tvolume of solid\tvolume of liquid\t"
+			   "porousness\talpha\tparameter A\tparameter B\tmaximal m" << std::endl;
+	}
+	auto printVar = [&] (float val) {
+		if (val == val) out << val << '\t';
+		else out << '\t';
+	};
+	out << ui->sampleNameEdit->text().toStdString() << '\t';
+	printVar(massZero);
+	printVar(massMax);
+	printVar(massClean);
+	printVar(aFit);
+	printVar(bFit);
+	printVar(vTotal);
+	printVar(v1);
+	printVar(v2);
+	printVar(porousness);
+	printVar(alpha);
+	printVar(bigA);
+	printVar(bigB);
+	printVar(massMax);
+	out << std::endl;
+	ui->statusBar->showMessage(QString::fromStdString("Saved results of " + ui->sampleNameEdit->text().toStdString()));
 }

@@ -34,6 +34,7 @@ struct preferences
 	float stepReductionDivision;
 	int representatives;
 	float bendEndDeviation;
+	std::string resultsFile;
 
 	void load();
 	void save();
@@ -69,6 +70,7 @@ struct preferences
 		floatFunc("step_reduction_division", stepReductionDivision);
 		intFunc("representatives", representatives);
 		floatFunc("bend_end_deviation", bendEndDeviation);
+		stringFunc("results_file", resultsFile);
 	}
 };
 
