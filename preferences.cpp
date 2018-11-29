@@ -71,6 +71,7 @@ void preferences::setup() {
 	stepReductionDivision = 2;
 	representatives = 10;
 	bendEndDeviation = 0.01;
+	maximumLoops = 1000000;
 }
 
 void preferences::load() {

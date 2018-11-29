@@ -230,190 +230,209 @@ void MainWindow::compute() {
 	bigB = NAN;
 	mMax = NAN;
 
-	if (data.size() == 0) return;
-	massZero = data[0];
-	float averageTotal = 0;
-	std::list<float> numbers;
-	unsigned int index = 0;
+	std::string error;
 	bool done = false;
-	auto checkRollingAverage = [&] (bool includeUnstable) {
-		//std::cout << "Rolling average " << (averageTotal / numbers.size());
-		if (numbers.size() < (unsigned int)prefs.stabilityLength) {
-			numbers.push_front(data[index]);
-			averageTotal += data[index];
-			//std::cout << " no deviation " << std::endl;
-		} else {
-			float deviation = data[index] - (averageTotal / numbers.size());
-			if (deviation < 0) deviation *= -1;
-			float realSum = 0;
-			for (float it : numbers) realSum += it;
-			//std::cout << " deviation " << data[index] << " - " << (averageTotal / numbers.size()) << " or " << (realSum / numbers.size()) << " vs " << prefs.constantInstability << std::endl;
-			numbers.push_front(data[index]);
-			if (deviation > prefs.constantInstability) {
-				if (includeUnstable) {
+	try {
+		int loopsLeft = prefs.maximumLoops;
+		auto checkLoops = [&] () {
+			if (!loopsLeft) throw(std::runtime_error("failed to compute results"));
+		};
+
+		if (data.size() == 0) return;
+		massZero = data[0];
+		float averageTotal = 0;
+		std::list<float> numbers;
+		unsigned int index = 0;
+		auto checkRollingAverage = [&] (bool includeUnstable) {
+			//std::cout << "Rolling average " << (averageTotal / numbers.size());
+			if (numbers.size() < (unsigned int)prefs.stabilityLength) {
+				numbers.push_front(data[index]);
+				averageTotal += data[index];
+				//std::cout << " no deviation " << std::endl;
+			} else {
+				float deviation = data[index] - (averageTotal / numbers.size());
+				if (deviation < 0) deviation *= -1;
+				float realSum = 0;
+				for (float it : numbers) realSum += it;
+				//std::cout << " deviation " << data[index] << " - " << (averageTotal / numbers.size()) << " or " << (realSum / numbers.size()) << " vs " << prefs.constantInstability << std::endl;
+				numbers.push_front(data[index]);
+				if (deviation > prefs.constantInstability) {
+					if (includeUnstable) {
+						averageTotal += data[index] - numbers.back();
+						numbers.pop_back();
+					} else numbers.pop_front();
+					return true;
+				} else {
 					averageTotal += data[index] - numbers.back();
 					numbers.pop_back();
-				} else numbers.pop_front();
-				return true;
-			} else {
-				averageTotal += data[index] - numbers.back();
-				numbers.pop_back();
+				}
 			}
-		}
-		return false;
-	};
+			return false;
+		};
 
-	// Initial part
-	int instability = 0;
-	while (index < data.size()) {
-		massZero = averageTotal / numbers.size();
-		if (checkRollingAverage(false)) instability++;
-		else instability = std::max(instability - 1, 0);
-		if (instability > prefs.instabilityTolerance) break;
-		index++;
-	}
-	std::cout << "initial part ends at " << index << std::endl;
-	if (index < data.size()) {
-
-		// Increasing part
-		increaseStarted = index - 1;
-		instability = -prefs.increaseEndStability;
+		// Initial part
+		int instability = 0;
 		while (index < data.size()) {
-			if (checkRollingAverage(true)) instability = std::max(instability - 1,  -prefs.increaseEndStability);
-			else instability++;
-			if (instability >= 0) break;
+			massZero = averageTotal / numbers.size();
+			if (checkRollingAverage(false)) instability++;
+			else instability = std::max(instability - 1, 0);
+			if (instability > prefs.instabilityTolerance) break;
 			index++;
+			checkLoops();
 		}
-		int increaseEnded = index - 1;
-		std::cout << "increasing range " << increaseStarted << " " << increaseEnded << std::endl;
+		std::cout << "initial part ends at " << index << std::endl;
+		if (index < data.size()) {
 
-		double interestingAverage = 0;
-		int interestingPoints = 0;
-		int interestingEnd = increaseEnded;
-		instability = 0;
-		for (int i = increaseStarted + 1; i < increaseEnded; i++) {
-			float derivative = data[i] - data[i - 1];
-			interestingAverage += derivative;
-			if (interestingPoints >= prefs.increaseEndStability) {
+			// Increasing part
+			increaseStarted = index - 1;
+			instability = -prefs.increaseEndStability;
+			while (index < data.size()) {
+				if (checkRollingAverage(true)) instability = std::max(instability - 1,  -prefs.increaseEndStability);
+				else instability++;
+				if (instability >= 0) break;
+				index++;
+				checkLoops();
+			}
+			int increaseEnded = index - 1;
+			std::cout << "increasing range " << increaseStarted << " " << increaseEnded << std::endl;
+
+			double interestingAverage = 0;
+			int interestingPoints = 0;
+			int interestingEnd = increaseEnded;
+			instability = 0;
+			for (int i = increaseStarted + 1; i < increaseEnded; i++) {
+				float derivative = data[i] - data[i - 1];
+				interestingAverage += derivative;
+				if (interestingPoints >= prefs.increaseEndStability) {
+					interestingAverage -= data[i - interestingPoints] - data[i - interestingPoints - 1];
+					float deviation = derivative - interestingAverage / interestingPoints;
+					if (deviation < 0) deviation *= -1;
+					interestingEnd = i;
+					if (deviation < prefs.bendEndDeviation) instability++;
+					else instability = std::max(instability - 1, 0);
+					if (instability > prefs.instabilityTolerance) break;
+				} else interestingPoints++;
+				checkLoops();
+			}
+			instability = 0;
+			for (int i = interestingEnd + increaseStarted + 1; i < increaseEnded; i++) {
+				float derivative = data[i] - data[i - 1];
+				interestingAverage += derivative;
 				interestingAverage -= data[i - interestingPoints] - data[i - interestingPoints - 1];
 				float deviation = derivative - interestingAverage / interestingPoints;
 				if (deviation < 0) deviation *= -1;
-				interestingEnd = i;
-				if (deviation < prefs.bendEndDeviation) instability++;
+				interestingEnd = i - interestingPoints;
+				if (deviation > prefs.bendEndDeviation) instability++;
 				else instability = std::max(instability - 1, 0);
 				if (instability > prefs.instabilityTolerance) break;
-			} else interestingPoints++;
-		}
-		instability = 0;
-		for (int i = interestingEnd + increaseStarted + 1; i < increaseEnded; i++) {
-			float derivative = data[i] - data[i - 1];
-			interestingAverage += derivative;
-			interestingAverage -= data[i - interestingPoints] - data[i - interestingPoints - 1];
-			float deviation = derivative - interestingAverage / interestingPoints;
-			if (deviation < 0) deviation *= -1;
-			interestingEnd = i - interestingPoints;
-			if (deviation > prefs.bendEndDeviation) instability++;
-			else instability = std::max(instability - 1, 0);
-			if (instability > prefs.instabilityTolerance) break;
-		}
+				checkLoops();
+			}
 
 
-		std::cout << "Interesting points end at " << interestingEnd << std::endl;
+			std::cout << "Interesting points end at " << interestingEnd << std::endl;
 
-		std::vector<std::pair<float, float>> representatives;
-		for (int i = increaseStarted; i < interestingEnd; i += std::max((interestingEnd - increaseStarted) / prefs.representatives, 1)) {
-			representatives.push_back(std::make_pair((i - increaseStarted) * getAuxiliaryTimeInterval(), data[i]));
-		}
-		auto meanDeviation = [&] () -> float {
-			float result = 0;
-			for (unsigned int i = 0; i < representatives.size(); i++) {
+			std::vector<std::pair<float, float>> representatives;
+			for (int i = increaseStarted; i < interestingEnd; i += std::max((interestingEnd - increaseStarted) / prefs.representatives, 1)) {
+				representatives.push_back(std::make_pair((i - increaseStarted) * getAuxiliaryTimeInterval(), data[i]));
+				checkLoops();
+			}
+			auto meanDeviation = [&] () -> float {
+								 float result = 0;
+								 for (unsigned int i = 0; i < representatives.size(); i++) {
 				float yDiv = functionAt(representatives[i].first) - representatives[i].second;
-				result += yDiv * yDiv;
-			}
-			return result;
-		};
-		float aStep = prefs.aStep;
-		float bStep = prefs.bStep;
-		float x0step = prefs.x0step;
-		float y0step = prefs.y0step;
-		aFit = prefs.startingA;
-		bFit = prefs.startingB;
-		x0 = prefs.startingX0;
-		y0 = prefs.startingY0;
-		for (int repetition = 0; repetition < prefs.stepReductions; repetition++) {
-			bool didSomething = true;
-			float finalBest = 9000000000;
-			while (didSomething) {
-				didSomething = false;
-				std::array<float, 3> possibilities = {aFit - aStep, aFit, aFit + aStep};
-				auto tryPossibilities = [&] (float& change) {
-					float best = 9000000000000;
-					int bestAt = 1;
-					for (int i = 0; i < 3; i++) {
-						change = possibilities[i];
-						float got = meanDeviation();
-						if (got < best) {
-							best = got;
-							bestAt = i;
+					result += yDiv * yDiv;
+				}
+				return result;
+			};
+			float aStep = prefs.aStep;
+			float bStep = prefs.bStep;
+			float x0step = prefs.x0step;
+			float y0step = prefs.y0step;
+			aFit = prefs.startingA;
+			bFit = prefs.startingB;
+			x0 = prefs.startingX0;
+			y0 = prefs.startingY0;
+			for (int repetition = 0; repetition < prefs.stepReductions; repetition++) {
+				bool didSomething = true;
+				float finalBest = 9000000000;
+				while (didSomething) {
+					didSomething = false;
+					std::array<float, 3> possibilities = {aFit - aStep, aFit, aFit + aStep};
+					auto tryPossibilities = [&] (float& change) {
+						float best = 9000000000000;
+						int bestAt = 1;
+						for (int i = 0; i < 3; i++) {
+							change = possibilities[i];
+							float got = meanDeviation();
+							if (got < best) {
+								best = got;
+								bestAt = i;
+							}
 						}
-					}
-					if (best < finalBest) finalBest = best;
-					if (bestAt != 1) didSomething = true;
-					change = possibilities[bestAt];
-				};
-				tryPossibilities(aFit);
-				possibilities = {bFit - bStep, bFit, bFit + bStep};
-				tryPossibilities(bFit);
-				possibilities = {x0 - x0step, x0, x0 + x0step};
-				tryPossibilities(x0);
-				possibilities = {y0 - y0step, y0, y0 + y0step};
-				tryPossibilities(y0);
+						if (best < finalBest) finalBest = best;
+						if (bestAt != 1) didSomething = true;
+						change = possibilities[bestAt];
+					};
+					tryPossibilities(aFit);
+					possibilities = {bFit - bStep, bFit, bFit + bStep};
+					tryPossibilities(bFit);
+					possibilities = {x0 - x0step, x0, x0 + x0step};
+					tryPossibilities(x0);
+					possibilities = {y0 - y0step, y0, y0 + y0step};
+					tryPossibilities(y0);
+					checkLoops();
+				}
+
+				aStep /= prefs.stepReductionDivision;
+				bStep /= prefs.stepReductionDivision;
+				x0step /= prefs.stepReductionDivision;
+				y0step /= prefs.stepReductionDivision;
+				checkLoops();
 			}
+			std::cout << "Computed values a " << aFit << " b " << bFit << " x0 " << x0 << " y0 " << y0 << std::endl;
 
-			aStep /= prefs.stepReductionDivision;
-			bStep /= prefs.stepReductionDivision;
-			x0step /= prefs.stepReductionDivision;
-			y0step /= prefs.stepReductionDivision;
-		}
-		std::cout << "Computed values a " << aFit << " b " << bFit << " x0 " << x0 << " y0 " << y0 << std::endl;
+			mMax = aFit / bFit;
 
-		mMax = aFit / bFit;
-
-		std::cout << "increasing part ends at " << index << std::endl;
-		if (index < data.size()) {
-
-			// Saturated part
-			instability = 0;
-			while (index < data.size()) {
-				massMax = averageTotal / numbers.size();
-				if (checkRollingAverage(false))instability++;
-				else instability = std::max(instability - 1, 0);
-				if (instability > prefs.instabilityTolerance) break;
-				index++;
-			}
-			std::cout << "saturated part ends at " << index << std::endl;
+			std::cout << "increasing part ends at " << index << std::endl;
 			if (index < data.size()) {
 
-				// Swing
-				while (index < data.size() && instability > 0) {
-					if (checkRollingAverage(true)) instability++;
+				// Saturated part
+				instability = 0;
+				while (index < data.size()) {
+					massMax = averageTotal / numbers.size();
+					if (checkRollingAverage(false))instability++;
 					else instability = std::max(instability - 1, 0);
+					if (instability > prefs.instabilityTolerance) break;
 					index++;
+					checkLoops();
 				}
-				std::cout << "swing part ends at " << index << std::endl;
+				std::cout << "saturated part ends at " << index << std::endl;
 				if (index < data.size()) {
-					massClean = averageTotal / numbers.size();
-					v2 = massClean / prefs.liquidDensity;
-					vTotal = v1 + v2;
-					porousness = v2 / (v1 + v2);
-					alpha = (massMax - prefs.filterMax - massClean + prefs.filterMin) / (massClean - prefs.filterMin);
-					bigA = aFit / (pow(porousness, 4) / ((1 - porousness) * (1 - porousness)));
-					bigA = bFit / (pow(porousness, 3) / ((1 - porousness) * (1 - porousness)));
-					porousness *= 100;
-					done = true;
+
+					// Swing
+					while (index < data.size() && instability > 0) {
+						if (checkRollingAverage(true)) instability++;
+						else instability = std::max(instability - 1, 0);
+						index++;
+						checkLoops();
+					}
+					std::cout << "swing part ends at " << index << std::endl;
+					if (index < data.size()) {
+						massClean = averageTotal / numbers.size();
+						v2 = massClean / prefs.liquidDensity;
+						vTotal = v1 + v2;
+						porousness = v2 / (v1 + v2);
+						alpha = (massMax - prefs.filterMax - massClean + prefs.filterMin) / (massClean - prefs.filterMin);
+						bigA = aFit / (pow(porousness, 4) / ((1 - porousness) * (1 - porousness)));
+						bigA = bFit / (pow(porousness, 3) / ((1 - porousness) * (1 - porousness)));
+						porousness *= 100;
+						done = true;
+					}
 				}
 			}
 		}
+	} catch (std::exception& e) {
+		error = e.what();
 	}
 
 	// Print the resuts
@@ -434,7 +453,8 @@ void MainWindow::compute() {
 	if (notNan(bigA)) out << "parameter A: " << bigA << ", ";
 	if (notNan(bigB)) out << "parameter B: " << bigB << ", ";
 	if (notNan(mMax)) out << "maximal m: " << mMax << ", ";
-	if (done) out << "all data obtained.";
+	if (!error.empty()) out << error << ".";
+	else if (done) out << "all data obtained.";
 	else out << "still measuring.";
 
 	ui->outputLabel->setText(QString::fromStdString(out.str()));

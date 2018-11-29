@@ -35,6 +35,7 @@ struct preferences
 	int representatives;
 	float bendEndDeviation;
 	std::string resultsFile;
+	int maximumLoops;
 
 	void load();
 	void save();
@@ -71,6 +72,7 @@ struct preferences
 		intFunc("representatives", representatives);
 		floatFunc("bend_end_deviation", bendEndDeviation);
 		stringFunc("results_file", resultsFile);
+		intFunc("maximum_loops", maximumLoops);
 	}
 };
 
