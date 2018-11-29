@@ -77,7 +77,7 @@ void MainWindow::useSerialPort() {
 	if (!serialPortOpen) {
 		if (prefs.simulationFile.empty()) {
 			ui->statusBar->showMessage("Could not connect to port: " + serialPort.errorString());
-			stop();
+			stop(true);
 			return;
 		}
 		if (!simulationFile) {
@@ -86,7 +86,7 @@ void MainWindow::useSerialPort() {
 		}
 		if (!simulationFile->good()) {
 			ui->statusBar->showMessage("Done reading");
-			stop();
+			stop(true);
 			return;
 		}
 		std::getline(*simulationFile, input, '\n');
@@ -141,14 +141,14 @@ void MainWindow::start() {
 	started = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
-void MainWindow::stop() {
+void MainWindow::stop(bool hideMessage) {
 	timer->stop();
 	computationTimer->stop();
 	running = false;
 	ui->startStopButton->setText("Start");
 	compute();
 	plot();
-	ui->statusBar->showMessage("Experiment ended");
+	if (!hideMessage) ui->statusBar->showMessage("Experiment ended");
 }
 
 float MainWindow::getAuxiliaryTimeInterval() {

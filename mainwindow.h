@@ -48,7 +48,7 @@ private:
 	uint64_t ended;
 
 	void start();
-	void stop();
+	void stop(bool hideMessage = false);
 	bool running = false;
 	bool usingFile = false;
 
