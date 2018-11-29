@@ -102,7 +102,7 @@ void MainWindow::useSerialPort() {
 	std::stringstream inputStream(input);
 	std::string line;
 	while (std::getline(inputStream, line, '\n')) {
-		//std::cout << "Parsing line " << line << std::endl;
+		bool foundNumber = false;
 		float got = 0;
 		int sign = 1;
 		int at = 0;
@@ -110,6 +110,7 @@ void MainWindow::useSerialPort() {
 		  if (line[at] >= '0' && line[at] <= '9') {
 			got *= 10;
 			got += line[at] - '0';
+			foundNumber = true;
 		  } else if (line[at] == '-') {
 			sign = -1;
 		  }
@@ -120,10 +121,11 @@ void MainWindow::useSerialPort() {
 		  if (line[at] >= '0' && line[at] <= '9') {
 			got += behind * (line[at] - '0');
 			behind /= 10;
+			foundNumber = true;
 		  }
 		}
 		got *= sign;
-		data.push_back(got);
+		if (foundNumber) data.push_back(got);
 	}
 	ended = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 	plot();
